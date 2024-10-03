@@ -127,6 +127,7 @@ def download_chunks(chunk_urls, output_folder, max_retries=3):
 
 def merge_chunks(output_folder, output_file):
     chunk_files = [f for f in os.listdir(output_folder) if f.endswith('.ts')]
+    chunk_files = sorted(chunk_files, key=lambda x: int(re.search(r'(\d+)', x).group()))
 
     file_list_path = os.path.join(output_folder, "file_list.txt").replace("\\", "/")
     newline = '\r\n' if platform.system() == 'Windows' else '\n'
