@@ -71,21 +71,6 @@ def get_chunk_urls(chunklist_content, base_url):
     return chunk_urls
 
 
-def download_chunks_old(chunk_urls, output_folder):
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-
-    for i, chunk_url in enumerate(chunk_urls):
-        chunk_filename = f"chunk_{i}.ts"
-        chunk_path = os.path.join(output_folder, chunk_filename)
-        
-        response = requests.get(chunk_url, stream=True)
-        with open(chunk_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=1024):
-                if chunk:
-                    f.write(chunk)
-        print(f"Downloaded {chunk_filename}")
-
 def download_chunks(chunk_urls, output_folder, max_retries=3):
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
