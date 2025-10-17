@@ -6,9 +6,12 @@ import argparse
 import shutil
 import platform
 import time
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def extract_playlist_url(webpage_url):
-    response = requests.get(webpage_url)
+    #response = requests.get(webpage_url)
+    response = requests.get(webpage_url, verify=False) #ignore SSL errors
     if response.status_code == 200:
         page_content = response.text
 
@@ -36,7 +39,8 @@ def generate_filename_from_url(webpage_url):
     return f"{filename}.mp4"
 
 def download_m3u8(url):
-    response = requests.get(url)
+    #response = requests.get(url)
+    response = requests.get(url, verify=False) #ignore SSL errors
     if response.status_code == 200:
         return response.text
     else:
@@ -85,7 +89,7 @@ def download_chunks(chunk_urls, output_folder, max_retries=3):
 
         for attempt in range(max_retries):
             try:
-                response = requests.get(chunk_url, stream=True, timeout=10)
+                response = requests.get(chunk_url, stream=True, timeout=10, verify=False) #ignore SSL errors
                 response.raise_for_status()  
 
                 with open(chunk_path, 'wb') as f:
