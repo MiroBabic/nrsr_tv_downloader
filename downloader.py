@@ -7,14 +7,17 @@ import shutil
 import platform
 import time
 import urllib3
+from urllib.parse import urljoin
+import sys  
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+# optional cert control (default: verify with system/embedded bundle)
+CERT_VERIFY = True 
+
 def extract_playlist_url(webpage_url):
-    #response = requests.get(webpage_url)
-    response = requests.get(webpage_url, verify=False) #ignore SSL errors
+    response = requests.get(webpage_url, verify=CERT_VERIFY)  
     if response.status_code == 200:
         page_content = response.text
-
 
         match = re.search(r'file: \'(//.*?\.m3u8)\'', page_content)
         if match:
@@ -27,20 +30,16 @@ def extract_playlist_url(webpage_url):
     
 def clear_output_folder(output_folder):
     if os.path.exists(output_folder):
-        
         shutil.rmtree(output_folder)
-    
     os.makedirs(output_folder)
 
 def generate_filename_from_url(webpage_url):
-
     filename = re.sub(r'[^a-zA-Z0-9]', '_', webpage_url)
-    
     return f"{filename}.mp4"
 
 def download_m3u8(url):
     #response = requests.get(url)
-    response = requests.get(url, verify=False) #ignore SSL errors
+    response = requests.get(url, verify=CERT_VERIFY)  
     if response.status_code == 200:
         return response.text
     else:
@@ -52,28 +51,39 @@ def get_chunklist_url(m3u8_content, base_url):
     else:
         return get_chunklist_url_linux(m3u8_content, base_url)
 
+def _ensure_trailing_slash(u):
+    return u if u.endswith('/') else (u + '/')
 
 def get_chunklist_url_linux(m3u8_content, base_url):
+    base_url = _ensure_trailing_slash(base_url)
     for line in m3u8_content.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
         if line.endswith(".m3u8"):
-            return os.path.join(base_url, line)
+            return urljoin(base_url, line)
     raise Exception("Chunklist URL not found in the m3u8 file")
-
 
 def get_chunklist_url_windows(m3u8_content, base_url):
+    base_url = _ensure_trailing_slash(base_url)
     for line in m3u8_content.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
         if line.endswith(".m3u8"):
-            return f"{base_url}/{line}".replace("\\", "/")
+            return urljoin(base_url, line)
     raise Exception("Chunklist URL not found in the m3u8 file")
 
-
 def get_chunk_urls(chunklist_content, base_url):
+    base_url = _ensure_trailing_slash(base_url)
     chunk_urls = []
     for line in chunklist_content.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
         if line.endswith(".ts"):
-            chunk_urls.append(os.path.join(base_url, line))
+            chunk_urls.append(urljoin(base_url, line))
     return chunk_urls
-
 
 def download_chunks(chunk_urls, output_folder, max_retries=3):
     if not os.path.exists(output_folder):
@@ -89,7 +99,7 @@ def download_chunks(chunk_urls, output_folder, max_retries=3):
 
         for attempt in range(max_retries):
             try:
-                response = requests.get(chunk_url, stream=True, timeout=10, verify=False) #ignore SSL errors
+                response = requests.get(chunk_url, stream=True, timeout=10, verify=CERT_VERIFY)  
                 response.raise_for_status()  
 
                 with open(chunk_path, 'wb') as f:
@@ -156,42 +166,47 @@ def merge_chunks(output_folder, output_file):
     subprocess.run(ffmpeg_cmd)
     print(f"Video saved to {output_file}")
 
-def main(webpage_url):
+def main(webpage_url, extra_ca=None):
+    # minimal cert selection: prefer CLI-provided PEM, else local cacert.pem, else default True
+    global CERT_VERIFY
+    if extra_ca and os.path.exists(extra_ca):
+        CERT_VERIFY = extra_ca
+    else:
+        # look for cacert.pem next to the running script/exe
+        base_dir = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(os.path.abspath(__file__))
+        candidate = os.path.join(base_dir, "cacert.pem")
+        if os.path.exists(candidate):
+            CERT_VERIFY = candidate
+        else:
+            CERT_VERIFY = True  # use system/certifi bundle
+
     playlist_url = extract_playlist_url(webpage_url)
-    base_url = os.path.dirname(playlist_url)
+    base_url = (playlist_url.rsplit('/', 1)[0] + '/')  
     print(f"Extracted Playlist URL: {playlist_url}")
 
-    
     output_folder = "chunks"
     clear_output_folder(output_folder)
 
-    
     m3u8_content = download_m3u8(playlist_url)
-    
-    
+
     chunklist_url = get_chunklist_url(m3u8_content, base_url)
     print(f"Chunklist URL: {chunklist_url}")
-    
-    
+
+    base_url = (chunklist_url.rsplit('/', 1)[0] + '/')  
+
     chunklist_content = download_m3u8(chunklist_url)
     chunk_urls = get_chunk_urls(chunklist_content, base_url)
-    
-    
+
     download_chunks(chunk_urls, output_folder)
-    
-    
+
     output_file = generate_filename_from_url(webpage_url)
     merge_chunks(output_folder, output_file)
     
     print("Download and merge complete!")
 
 if __name__ == "__main__":
-    
     parser = argparse.ArgumentParser(description="Download and merge video chunks from a webpage.")
     parser.add_argument('webpage_url', type=str, help='The URL of the webpage containing the video playlist')
-    
-    
+    parser.add_argument('--extra-ca', dest='extra_ca', default=None, help='Optional path to a PEM CA bundle')
     args = parser.parse_args()
-    
-    
-    main(args.webpage_url)
+    main(args.webpage_url, extra_ca=args.extra_ca)

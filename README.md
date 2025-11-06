@@ -65,4 +65,15 @@ nrsr_tv_downloader.exe https://tv.nrsr.sk/archiv/schodza/9/21
 
 - **`ffmpeg` nebol nájdený**: Skontrolujte, či je `ffmpeg` nainštalovaný a správne umiestnený v adresári (pre Windows) alebo nainštalovaný cez správca balíkov (pre Linux).
 
+- **`ssl.SSLCertVerificationError` **: Ak sa objaví chyba overenia SSL certifikátu, program nevie overiť platnosť certifikátu webu. V takom prípade môžete pridať vlastný balík dôveryhodných certifikátov
+
+```bash
+nrsr_tv_downloader.exe " https://tv.nrsr.sk/archiv/schodza/9/21" --extra-ca=cacert.pem
+```
+
+Súbor cacert.pem môže byť napríklad kópia z knižnice certifi alebo z dôveryhodného zdroja.
+
+Alternatívne môžete umiestniť cacert.pem do rovnakého priečinka ako .exe, a program ho automaticky použije bez potreby parametra --extra-ca.
+
+
 
